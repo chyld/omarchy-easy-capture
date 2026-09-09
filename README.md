@@ -6,14 +6,13 @@ Capture your screen in a few clicks, without memorizing hotkeys. Screenshot or r
 
 Captures stay on your computer. Audio is off until you enable it.
 
-## New in 0.3.0
+## New in 0.4.0
 
-- A custom outline camera icon and compact Screenshot / Record tabs.
-- Region, App, and Monitor targets with an explicit **Capture!** button.
-- Independent desktop sound and microphone controls, with red muted icons when off.
-- A microphone input picker when multiple inputs are available.
-- App selection across monitors, including visible special-workspace and pinned windows.
-- Steady hover colors, keyboard navigation, and a recording timer with click-to-stop.
+- One shared capture service: start on one monitor, see the timer and stop on either.
+- Owned process cleanup, bounded device discovery, and clear capture errors.
+- Private capture files that never overwrite an existing file.
+- The same compact tabs, microphone picker, muted icons, and steady hover colors.
+- Scrollable controls for longer device lists, with keyboard navigation.
 
 ## Install
 
@@ -21,9 +20,10 @@ Captures stay on your computer. Audio is off until you enable it.
 omarchy plugin add https://github.com/chyld/omarchy-easy-capture.git --enable
 ```
 
-The plugin uses Omarchy/Quickshell, Hyprland, `bash`, `jq`, `slurp`, `hyprpicker`,
-`grim`, `wl-copy`, `gpu-screen-recorder`, and `pactl`, along with Omarchy's capture
-and notification helpers.
+Uses Omarchy/Quickshell, Hyprland, system Python 3, `slurp`, `hyprpicker`, `grim`,
+`wl-copy`, `gpu-screen-recorder`, `pactl`, and `notify-send`. No Python packages
+or separate setup scripts are required. Capture output requires a Linux filesystem
+with anonymous-file support (`O_TMPFILE`), such as ext4 or Btrfs.
 
 ## Update
 
@@ -32,108 +32,121 @@ omarchy plugin update chyld.easy-capture
 omarchy restart shell
 ```
 
-Restart the shell after updating so the dialog loads the latest QML components.
+Stop any active recording before updating or restarting. The restart loads the
+new shared QML service and clears cached components.
 
 ## Remove
-
-Stop any recording before removing the plugin:
 
 ```sh
 omarchy plugin remove chyld.easy-capture
 ```
 
-Removal deletes the plugin files at
-`~/.config/omarchy/plugins/chyld.easy-capture/`. Saved screenshots and recordings
-remain in their output directories. The plugin creates no credentials or
-separate persistent settings store.
+Removing the last widget cancels its active picker or capture and stops owned
+helper, recorder, freeze and clipboard processes. Finish a recording with the
+Stop control first if you want to save it: cancelled captures are discarded.
+
+Removal deletes `~/.config/omarchy/plugins/chyld.easy-capture/`. Completed captures
+remain in their output directories. Installed capture tools remain installed.
+Quickshell runtime logs under `$XDG_RUNTIME_DIR/quickshell/` and its managed cache
+may remain. There are no plugin credentials, persistent settings, service units,
+shared configuration edits, or privilege grants to remove. Clipboard managers
+may independently retain copied images.
 
 ## What it shows
 
-- A camera icon that opens the capture dialog.
-- **Screenshot** and **Record** tabs, each with Region, App, and Monitor targets.
+- A camera icon that opens the dialog.
+- **Screenshot** and **Record** tabs with Region, App, and Monitor targets.
 - A monitor list when you need to choose between displays.
 - Desktop sound and microphone toggles under Record; muted icons are red.
 - Named microphone inputs plus **System default** when multiple inputs are available.
-- A pulsing red dot and elapsed timer while recording; click the camera to stop.
+- A pulsing red dot and timer on each bar while recording; click a camera icon to stop.
 
-Select the target, adjust audio if recording, and click **Capture!** Changing a
-tab or target alone does not start a capture. Region and App open the selection
-tool after the dialog closes; Monitor starts immediately after that delay.
+Choose your target and audio options, then click **Capture!** Changing a tab or
+target alone does not start a capture. Region and App open the picker after the
+dialog fades out. Click an app or drag a region; Escape cancels. The picker does
+not use Omarchy's shared marker files or its global picker-specific shortcuts.
 
-Tab/Shift+Tab move through controls. Arrows or h/j/k/l navigate within and between
-sections. Enter or Space activates the highlighted control; Escape closes the dialog.
+Tab/Shift+Tab move through dialog controls. Arrows or h/j/k/l navigate within and
+between sections. Enter or Space activates the highlighted control; Escape closes
+the dialog. Long device lists scroll to keep the keyboard selection visible.
 
 ## When it refreshes
 
-Monitor and microphone lists refresh when the dialog opens. Microphones also
-refresh when you select Record or enable Microphone, and every three seconds
-while the Record dialog is open with Microphone enabled.
+Device discovery starts when a dialog opens, not when the plugin loads. Microphone
+inputs refresh when Record or Microphone is enabled and every three seconds while
+the Record dialog is open with Microphone on. Failed refreshes back off and stop
+after four consecutive failures; reopen the dialog to retry.
 
 Speaker-monitor sources are excluded from the microphone picker. With one input,
-its name is shown without a picker. If a selected input disconnects, the selection
-returns to System default with a notice.
+its name appears without a picker. If the chosen input disappears during refresh,
+selection returns to System default with a notice. The backend checks a named
+input again before recording and refuses an unavailable device.
 
-Tab, target, and audio choices stay in memory while the widget is loaded and
-reset on shell restart. Recording state belongs to each widget instance.
+Tab, target, audio options, and recording state are shared across monitors and
+kept in memory. Choices reset when the shell restarts. Each capture takes a fixed
+snapshot of your choices; later UI changes do not alter a recording in progress.
 
 ## Capturing and recording
 
-App selection includes visible windows on every enabled monitor, regardless of
-which monitor you started from. Hidden workspaces and hidden or unmapped windows
-are excluded. Region selection supports a freeform rectangle. A single monitor
-is selected automatically for the Monitor target.
+App selection includes visible windows on every enabled monitor, including open
+special workspaces and pinned windows. Hidden workspaces, hidden windows, and
+unmapped windows are excluded. A single monitor is selected automatically for the
+Monitor target.
 
 Desktop sound uses the system's default output. Microphone recording uses the
-system default input or your chosen device. Enabling both mixes them into a single
-AAC track so playback includes both sources.
+default input or your chosen device. Enabling both mixes them into one AAC track.
+Recording uses 60 FPS with Omarchy's default encoding options; monitors larger
+than 3840×2160 are capped. There is no webcam, output-device selector, or quality setting.
 
-The recorder uses 60 FPS and Omarchy's default video encoding options. Monitor
-recordings larger than 3840×2160 are capped. There is no webcam, desktop-output
-device selector, or video-quality setting.
-
-The stop command sends SIGINT so the recorder can finalize the file. It currently
-matches `gpu-screen-recorder` processes by name, so it can also stop a recording
-started elsewhere.
+Stop signals only the recorder owned by this plugin and allows up to ten seconds
+to finalize. Recordings stop at eight hours or the 16 GiB size threshold. A kernel
+file-size ceiling allows at most 16 MiB of finalization overhead. Failed or
+cancelled captures are not published as completed files.
 
 ## Data, network, and execution
 
-Screenshots are saved under `~/Pictures` or `$OMARCHY_SCREENSHOT_DIR`, and copied
-to the clipboard. Recordings are saved under `~/Videos` or
-`$OMARCHY_SCREENRECORD_DIR`. XDG picture/video directory settings are also
-respected. Completion notifications identify the saved file; recording
-notifications offer playback through `mpv`.
+Screenshots go to `~/Pictures` or `$OMARCHY_SCREENSHOT_DIR`; recordings go to
+`~/Videos` or `$OMARCHY_SCREENRECORD_DIR`. XDG picture/video directory settings
+are respected. `user-dirs.dirs` is read as bounded data; it is never executed.
+Configured output paths must be absolute, without symlink components or unsafe
+ownership/permissions. New directories are private; existing directory permissions
+are not changed.
 
-The plugin has no upload or analytics client. It reads monitor and window metadata
-through `hyprctl` and audio-source metadata through `pactl`. Capture commands
-inherit the shell environment and read `~/.config/user-dirs.dirs` when present.
+Files start as anonymous 0600 inodes and are published through the same descriptor
+with a unique timestamped name. Existing files are never overwritten. Screenshots
+are also offered to the clipboard. This clipboard provider ends when another
+application replaces the clipboard, another capture begins, the plugin is removed,
+the shell restarts, or eight hours elapse. Notifications identify saved filenames;
+they contain no persisted executable actions or image paths.
 
-Region selection uses `omarchy-capture-region`. App selection uses
-`capture-region.sh`, a local copy of the installed Omarchy helper adapted to
-include windows across monitors. The packaged helper is unchanged. Selection
-uses `hyprpicker` and `slurp`; screenshots use `grim` and `wl-copy`; recordings
-use `gpu-screen-recorder`. Target and audio values are passed as shell positional
-arguments. Capture waits 200 ms for the popup to fade out before selection begins.
+The plugin has no upload, analytics, or network client. Device/window metadata comes
+from local `hyprctl` and `pactl` commands. All tool paths are fixed under `/usr/bin`.
+Python runs with `-I -S -B`; children receive only the required local desktop,
+locale, home and output-directory settings, rather than the ambient environment.
+Raw tool errors and capture contents are not sent to the shell log.
 
-Quickshell manages its own runtime logs and QML cache, which can survive plugin
-removal. Saved captures and the screenshot clipboard contents also outlive the
-plugin's in-memory state.
+Metadata output is capped at 1 MiB per command before parsing; display lists are
+limited to 16 entries, microphone inputs to 32, and window discovery to 512.
+The shell receives only small validated JSON events. Capture geometry is bounded
+to 64 megapixels, screenshots to 256 MiB, and the interactive picker to two minutes.
+Children run in owned sessions with deadlines and cleanup on error, cancellation,
+reload, or removal. Details and review limits are in [Security](docs/SECURITY.md).
 
 ## Development
 
 ```sh
-node --test tests/audio_devices.test.js
-python3 tests/audio_test.py
-python3 tests/picker_test.py
+node --test tests/model.test.js
+/usr/bin/python3 -I -S -B -m unittest discover -s tests -p '*_test.py'
 omarchy plugin validate .
-# Requires a running Wayland session and Omarchy/Quickshell.
-# Uses a fake capture host; does not record the screen or audio.
-python3 tests/interface_test.py
+# Requires a running Wayland session. Uses a fake capture backend.
+/usr/bin/python3 -I -S -B tests/interface_test.py
 ```
 
-The tests cover audio-source filtering, recorder arguments, cross-monitor picker
-candidates, cancellation, and QML controls and keyboard navigation. Plugin files
-normally hot-reload; restart the shell when a dialog shows stale components.
+Tests cover hostile output, file races, FIFO/symlink rejection, process-group cleanup,
+audio arguments, cross-monitor selection, QML controls, shared state, and removal.
+See [Architecture](docs/ARCHITECTURE.md) and [Contributing](docs/CONTRIBUTING.md).
 
 ## License
 
-[MIT](LICENSE). The adapted Omarchy picker retains its [upstream MIT notice](LICENSE.omarchy).
+[MIT](LICENSE). The [Omarchy notice](LICENSE.omarchy) is retained for the workspace
+and monitor-geometry behavior adapted from its capture helper.

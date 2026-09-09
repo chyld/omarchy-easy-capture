@@ -2,11 +2,13 @@
   "schemaVersion": 1,
   "id": "chyld.easy-capture",
   "name": "Omarchy Easy Capture",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "author": "chyld",
   "license": "MIT",
   "description": "Capture your screen in a few clicks, without memorizing hotkeys. Screenshot or record regions, apps, or monitors straight from your Omarchy bar, with optional desktop sound, microphone selection, and app capture across screens.",
-  "kinds": ["bar-widget"],
+  "kinds": [
+    "bar-widget"
+  ],
   "entryPoints": {
     "barWidget": "BarWidget.qml"
   },

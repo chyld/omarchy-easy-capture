@@ -8,15 +8,16 @@ Panel {
   manageIpc: false
   property var anchorItem: null
   property var hostWidget: null
-  readonly property string captureMode: hostWidget ? hostWidget.captureMode : "screenshot"
-  readonly property string targetType: hostWidget ? hostWidget.targetType : "region"
-  readonly property var monitorList: hostWidget ? hostWidget.monitors : []
-  readonly property string selectedMonitor: hostWidget ? hostWidget.selectedMonitor : ""
-  readonly property var microphoneInputs: hostWidget ? hostWidget.microphoneInputs : []
-  readonly property bool showMicrophones: captureMode === "record" && hostWidget && hostWidget.microphoneAudio
+  property var service: null
+  readonly property string captureMode: service ? service.captureMode : "screenshot"
+  readonly property string targetType: service ? service.targetType : "region"
+  readonly property var monitorList: service ? service.monitors : []
+  readonly property string selectedMonitor: service ? service.selectedMonitor : ""
+  readonly property var microphoneInputs: service ? service.microphoneInputs : []
+  readonly property bool showMicrophones: captureMode === "record" && service && service.microphoneAudio
   readonly property bool showMicrophonePicker: showMicrophones && microphoneInputs.length > 1
   readonly property var microphoneOptions: [{name: "", label: "System default"}].concat(microphoneInputs)
-  readonly property bool canStart: hostWidget ? hostWidget.canStart && hostWidget.phase === "idle" : false
+  readonly property bool canStart: service ? service.canStart && service.phase === "idle" : false
   readonly property bool showMonitorList: targetType === "monitor" && monitorList.length !== 1
   readonly property string panelFontFamily: bar ? bar.fontFamily : Style.font.family
   readonly property var targetValues: ["region", "app", "monitor"]
@@ -30,6 +31,18 @@ Panel {
     if (showMicrophonePicker) sections.push("microphone")
     sections.push("capture")
     return sections
+  }
+
+  function reveal(item) {
+    if (!root.opened || !item) return
+    Qt.callLater(function() {
+      if (!root.opened || !item) return
+      var y = item.mapToItem(content, 0, 0).y
+      if (y < scroller.contentY) scroller.contentY = y
+      else if (y + item.height > scroller.contentY + scroller.height)
+        scroller.contentY = y + item.height - scroller.height
+      scroller.contentY = Math.max(0, Math.min(scroller.contentY, Math.max(0, content.height - scroller.height)))
+    })
   }
 
   function setCursor(section, index) {
@@ -79,18 +92,18 @@ Panel {
     }
   }
   function toggleAudio(index) {
-    if (!hostWidget) return
-    if (index === 0) hostWidget.desktopAudio = !hostWidget.desktopAudio
-    else hostWidget.microphoneAudio = !hostWidget.microphoneAudio
+    if (!service) return
+    if (index === 0) service.desktopAudio = !service.desktopAudio
+    else service.microphoneAudio = !service.microphoneAudio
   }
   function activateCursor() {
-    if (!hostWidget) return
-    if (focusSection === "mode") hostWidget.captureMode = modeValues[selectedIndex]
-    else if (focusSection === "target") hostWidget.setTargetType(targetValues[selectedIndex])
-    else if (focusSection === "monitor" && monitorList[selectedIndex]) hostWidget.setSelectedMonitor(monitorList[selectedIndex].name)
+    if (!service) return
+    if (focusSection === "mode") service.captureMode = modeValues[selectedIndex]
+    else if (focusSection === "target") service.setTargetType(targetValues[selectedIndex])
+    else if (focusSection === "monitor" && monitorList[selectedIndex]) service.setSelectedMonitor(monitorList[selectedIndex].name)
     else if (focusSection === "audio") toggleAudio(selectedIndex)
-    else if (focusSection === "microphone" && microphoneOptions[selectedIndex]) hostWidget.setSelectedMicrophone(microphoneOptions[selectedIndex].name)
-    else if (focusSection === "capture" && canStart) hostWidget.startCapture(captureMode)
+    else if (focusSection === "microphone" && microphoneOptions[selectedIndex]) service.setSelectedMicrophone(microphoneOptions[selectedIndex].name)
+    else if (focusSection === "capture" && canStart) service.startCapture(captureMode)
   }
 
   KeyboardPanel {
@@ -114,181 +127,208 @@ Panel {
       onTabRequested: function(direction) { root.tabCursor(direction) }
       onActivateRequested: root.activateCursor()
 
-      Column {
-        id: content
-        width: parent.width
-        spacing: Style.space(10)
-        Text {
-          text: "Easy Capture"
-          textFormat: Text.PlainText
-          color: root.barForeground
-          font.family: root.panelFontFamily
-          font.pixelSize: Style.font.body * 0.9
-          font.bold: true
-        }
-        CaptureButtonGroup {
-          objectName: "modeTabs"
-          width: parent.width
-          equalWidth: true
-          fontFamily: root.panelFontFamily
-          foreground: root.barForeground
-          options: [{value: "screenshot", label: "Screenshot", icon: ""}, {value: "record", label: "Record", icon: ""}]
-          value: root.captureMode
-          cursorIndex: root.focusSection === "mode" ? root.selectedIndex : -1
-          onHovered: function(index, hovered) { if (hovered) root.setCursor("mode", index) }
-          onChanged: function(value) {
-            root.setCursor("mode", root.modeValues.indexOf(value))
-            if (root.hostWidget) root.hostWidget.captureMode = value
-          }
-        }
+      Flickable {
+        id: scroller
+        anchors.fill: parent
+        contentHeight: content.implicitHeight
+        contentWidth: width
+        clip: true
+        boundsBehavior: Flickable.StopAtBounds
+        flickableDirection: Flickable.VerticalFlick
         Column {
+          id: content
           width: parent.width
-          spacing: Style.space(6)
-          PanelSectionHeader { fontSize: Style.font.caption * 0.9; text: "target"; foreground: root.barForeground }
+          spacing: Style.space(10)
+          Text {
+            textFormat: Text.PlainText
+            text: "Easy Capture"
+            color: root.barForeground
+            font.family: root.panelFontFamily
+            font.pixelSize: Style.font.body * 0.9
+            font.bold: true
+          }
           CaptureButtonGroup {
-            objectName: "targetButtons"
+            objectName: "modeTabs"
             width: parent.width
             equalWidth: true
             fontFamily: root.panelFontFamily
             foreground: root.barForeground
-            options: [{value: "region", label: "Region", icon: "󰆟"}, {value: "app", label: "App", icon: "󰖯"}, {value: "monitor", label: "Monitor", icon: "󰍹"}]
-            value: root.targetType
-            cursorIndex: root.focusSection === "target" ? root.selectedIndex : -1
-            onHovered: function(index, hovered) { if (hovered) root.setCursor("target", index) }
+            options: [{value: "screenshot", label: "Screenshot", icon: ""}, {value: "record", label: "Record", icon: ""}]
+            value: root.captureMode
+            onCursorIndexChanged: if (cursorIndex >= 0) root.reveal(this)
+            cursorIndex: root.focusSection === "mode" ? root.selectedIndex : -1
+            onHovered: function(index, hovered) { if (hovered) root.setCursor("mode", index) }
             onChanged: function(value) {
-              root.setCursor("target", root.targetValues.indexOf(value))
-              if (root.hostWidget) root.hostWidget.setTargetType(value)
+              root.setCursor("mode", root.modeValues.indexOf(value))
+              if (root.service) root.service.captureMode = value
             }
           }
           Column {
-            visible: root.showMonitorList
             width: parent.width
-            spacing: Style.space(4)
+            spacing: Style.space(6)
+            PanelSectionHeader { fontSize: Style.font.caption * 0.9; text: "target"; foreground: root.barForeground }
+            CaptureButtonGroup {
+              objectName: "targetButtons"
+              width: parent.width
+              equalWidth: true
+              fontFamily: root.panelFontFamily
+              foreground: root.barForeground
+              options: [{value: "region", label: "Region", icon: "󰆟"}, {value: "app", label: "App", icon: "󰖯"}, {value: "monitor", label: "Monitor", icon: "󰍹"}]
+              value: root.targetType
+              onCursorIndexChanged: if (cursorIndex >= 0) root.reveal(this)
+              cursorIndex: root.focusSection === "target" ? root.selectedIndex : -1
+              onHovered: function(index, hovered) { if (hovered) root.setCursor("target", index) }
+              onChanged: function(value) {
+                root.setCursor("target", root.targetValues.indexOf(value))
+                if (root.service) root.service.setTargetType(value)
+              }
+            }
+            Column {
+              visible: root.showMonitorList
+              width: parent.width
+              spacing: Style.space(4)
+              Repeater {
+                model: root.monitorList
+                delegate: CaptureButton {
+                  required property var modelData
+                  required property int index
+                  width: parent.width
+                  leftAlign: true
+                  fontFamily: root.panelFontFamily
+                  foreground: root.barForeground
+                  iconText: "󰍹"
+                  text: modelData.name
+                  selected: root.selectedMonitor === modelData.name
+                  onHasCursorChanged: if (hasCursor) root.reveal(this)
+                  hasCursor: root.focusSection === "monitor" && root.selectedIndex === index
+                  onHovered: function(hovered) { if (hovered) root.setCursor("monitor", index) }
+                  onClicked: if (root.service) root.service.setSelectedMonitor(modelData.name)
+                }
+              }
+              Text {
+                textFormat: Text.PlainText
+                visible: root.monitorList.length === 0
+                text: "No monitors found"
+                color: root.barForeground
+                font.family: root.panelFontFamily
+                font.pixelSize: Style.font.bodySmall * 0.9
+              }
+            }
+          }
+          Column {
+            objectName: "audioOptions"
+            visible: root.captureMode === "record"
+            width: parent.width
+            spacing: Style.space(6)
+            PanelSectionHeader { fontSize: Style.font.caption * 0.9; text: "audio"; foreground: root.barForeground }
             Repeater {
-              model: root.monitorList
+              model: ["Desktop sounds", "Microphone"]
               delegate: CaptureButton {
-                required property var modelData
+                required property string modelData
                 required property int index
+                readonly property bool checked: root.service ? (index === 0 ? root.service.desktopAudio : root.service.microphoneAudio) : false
+                objectName: index === 0 ? "desktopToggle" : "microphoneToggle"
                 width: parent.width
                 leftAlign: true
+                text: modelData + " · " + (checked ? "On" : "Off")
+                iconText: index === 0 ? (checked ? "" : "") : (checked ? "󰍬" : "󰍭")
+                iconColor: checked ? Style.selectedStateColor(root.barForeground, Color.accent) : Color.urgent
+                selected: checked
                 fontFamily: root.panelFontFamily
                 foreground: root.barForeground
-                iconText: "󰍹"
-                text: modelData.name
-                selected: root.selectedMonitor === modelData.name
-                hasCursor: root.focusSection === "monitor" && root.selectedIndex === index
-                onHovered: function(hovered) { if (hovered) root.setCursor("monitor", index) }
-                onClicked: if (root.hostWidget) root.hostWidget.setSelectedMonitor(modelData.name)
+                onHasCursorChanged: if (hasCursor) root.reveal(this)
+                hasCursor: root.focusSection === "audio" && root.selectedIndex === index
+                onHovered: function(hovered) { if (hovered) root.setCursor("audio", index) }
+                onClicked: root.toggleAudio(index)
+              }
+            }
+          }
+          Column {
+            objectName: "microphonePicker"
+            visible: root.showMicrophones
+            width: parent.width
+            spacing: Style.space(6)
+            PanelSectionHeader {
+              visible: root.showMicrophonePicker
+              fontSize: Style.font.caption * 0.9
+              text: "microphone input"
+              foreground: root.barForeground
+            }
+            Column {
+              visible: root.showMicrophonePicker
+              width: parent.width
+              spacing: Style.space(4)
+              Repeater {
+                model: root.microphoneOptions
+                delegate: CaptureButton {
+                  required property var modelData
+                  required property int index
+                  width: parent.width
+                  leftAlign: true
+                  text: modelData.label
+                  selected: root.service && root.service.selectedMicrophone === modelData.name
+                  fontFamily: root.panelFontFamily
+                  foreground: root.barForeground
+                  onHasCursorChanged: if (hasCursor) root.reveal(this)
+                  hasCursor: root.focusSection === "microphone" && root.selectedIndex === index
+                  onHovered: function(hovered) { if (hovered) root.setCursor("microphone", index) }
+                  onClicked: if (root.service) root.service.setSelectedMicrophone(modelData.name)
+                }
               }
             }
             Text {
-              visible: root.monitorList.length === 0
-              text: "No monitors found"
+              textFormat: Text.PlainText
+              visible: !root.showMicrophonePicker && root.microphoneInputs.length === 1
+              width: parent.width
+              text: root.microphoneInputs.length ? root.microphoneInputs[0].label : ""
+              wrapMode: Text.Wrap
+              color: root.barForeground
+              font.family: root.panelFontFamily
+              font.pixelSize: Style.font.bodySmall * 0.9
+            }
+            Text {
+              textFormat: Text.PlainText
+              visible: text !== ""
+              width: parent.width
+              text: root.service ? root.service.microphoneMessage : ""
+              wrapMode: Text.Wrap
               color: root.barForeground
               font.family: root.panelFontFamily
               font.pixelSize: Style.font.bodySmall * 0.9
             }
           }
-        }
-        Column {
-          objectName: "audioOptions"
-          visible: root.captureMode === "record"
-          width: parent.width
-          spacing: Style.space(6)
-          PanelSectionHeader { fontSize: Style.font.caption * 0.9; text: "audio"; foreground: root.barForeground }
-          Repeater {
-            model: ["Desktop sounds", "Microphone"]
-            delegate: CaptureButton {
-              required property string modelData
-              required property int index
-              readonly property bool checked: root.hostWidget ? (index === 0 ? root.hostWidget.desktopAudio : root.hostWidget.microphoneAudio) : false
-              objectName: index === 0 ? "desktopToggle" : "microphoneToggle"
-              width: parent.width
-              leftAlign: true
-              text: modelData + " · " + (checked ? "On" : "Off")
-              iconText: index === 0 ? (checked ? "" : "") : (checked ? "󰍬" : "󰍭")
-              iconColor: checked ? Style.selectedStateColor(root.barForeground, Color.accent) : Color.urgent
-              selected: checked
-              fontFamily: root.panelFontFamily
-              foreground: root.barForeground
-              hasCursor: root.focusSection === "audio" && root.selectedIndex === index
-              onHovered: function(hovered) { if (hovered) root.setCursor("audio", index) }
-              onClicked: root.toggleAudio(index)
-            }
-          }
-        }
-        Column {
-          objectName: "microphonePicker"
-          visible: root.showMicrophones
-          width: parent.width
-          spacing: Style.space(6)
-          PanelSectionHeader {
-            visible: root.showMicrophonePicker
-            fontSize: Style.font.caption * 0.9
-            text: "microphone input"
-            foreground: root.barForeground
-          }
-          Column {
-            visible: root.showMicrophonePicker
-            width: parent.width
-            spacing: Style.space(4)
-            Repeater {
-              model: root.microphoneOptions
-              delegate: CaptureButton {
-                required property var modelData
-                required property int index
-                width: parent.width
-                leftAlign: true
-                text: modelData.label
-                selected: root.hostWidget && root.hostWidget.selectedMicrophone === modelData.name
-                fontFamily: root.panelFontFamily
-                foreground: root.barForeground
-                hasCursor: root.focusSection === "microphone" && root.selectedIndex === index
-                onHovered: function(hovered) { if (hovered) root.setCursor("microphone", index) }
-                onClicked: if (root.hostWidget) root.hostWidget.setSelectedMicrophone(modelData.name)
-              }
-            }
-          }
           Text {
-            visible: !root.showMicrophonePicker && root.microphoneInputs.length === 1
-            width: parent.width
-            text: root.microphoneInputs.length ? root.microphoneInputs[0].label : ""
             textFormat: Text.PlainText
-            wrapMode: Text.Wrap
-            color: root.barForeground
-            font.family: root.panelFontFamily
-            font.pixelSize: Style.font.bodySmall * 0.9
-          }
-          Text {
             visible: text !== ""
             width: parent.width
-            text: root.hostWidget ? root.hostWidget.microphoneMessage : ""
-            textFormat: Text.PlainText
+            text: root.service ? root.service.errorMessage : ""
+            color: Color.urgent
+            font.family: root.panelFontFamily
+            font.pixelSize: Style.font.bodySmall * 0.9
             wrapMode: Text.Wrap
+          }
+          PanelSeparator { width: parent.width; foreground: root.barForeground }
+          CaptureButton {
+            objectName: "captureButton"
+            width: parent.width
+            text: "Capture!"
+            enabled: root.canStart
+            fontFamily: root.panelFontFamily
+            foreground: root.barForeground
+            onHasCursorChanged: if (hasCursor) root.reveal(this)
+            hasCursor: root.focusSection === "capture"
+            onHovered: function(hovered) { if (hovered) root.setCursor("capture", 0) }
+            onClicked: if (root.service && root.canStart) root.service.startCapture(root.captureMode)
+          }
+          Text {
+            textFormat: Text.PlainText
+            visible: root.targetType === "monitor" && !root.selectedMonitor
+            text: "Pick a monitor first"
             color: root.barForeground
+            opacity: 0.6
             font.family: root.panelFontFamily
             font.pixelSize: Style.font.bodySmall * 0.9
           }
-        }
-        PanelSeparator { width: parent.width; foreground: root.barForeground }
-        CaptureButton {
-          objectName: "captureButton"
-          width: parent.width
-          text: "Capture!"
-          enabled: root.canStart
-          fontFamily: root.panelFontFamily
-          foreground: root.barForeground
-          hasCursor: root.focusSection === "capture"
-          onHovered: function(hovered) { if (hovered) root.setCursor("capture", 0) }
-          onClicked: if (root.hostWidget && root.canStart) root.hostWidget.startCapture(root.captureMode)
-        }
-        Text {
-          visible: root.targetType === "monitor" && !root.selectedMonitor
-          text: "Pick a monitor first"
-          color: root.barForeground
-          opacity: 0.6
-          font.family: root.panelFontFamily
-          font.pixelSize: Style.font.bodySmall * 0.9
         }
       }
     }

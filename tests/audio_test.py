@@ -1,52 +1,39 @@
-"""Run the real recording shell script with fake recorder and notification commands."""
-import json
-import os
+"""Audio option validation and the exact recorder argv."""
+import sys
 from pathlib import Path
-import subprocess
-import tempfile
 import unittest
-
-ROOT = Path(__file__).resolve().parent.parent
-
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+import capture_backend as backend
+from capture_runtime import CaptureError
 
 class AudioArgumentsTest(unittest.TestCase):
     def test_all_audio_combinations(self):
-        qml = (ROOT / 'BarWidget.qml').read_text()
-        source = qml.split('readonly property string recordScript: [', 1)[1].split('].join("\\n")', 1)[0]
-        script = '\n'.join(json.loads('[' + source + ']'))
-        subprocess.run(['bash', '-n'], input=script, text=True, check=True)
-        with tempfile.TemporaryDirectory() as folder:
-            temp = Path(folder)
-            recorder = temp / 'gpu-screen-recorder'
-            recorder.write_text('''#!/usr/bin/python3
-import json, os, pathlib, sys, time
-pathlib.Path(os.environ['CAPTURE_TEST_ARGS']).write_text(json.dumps(sys.argv[1:]))
-pathlib.Path(sys.argv[sys.argv.index('-o') + 1]).touch()
-time.sleep(0.3)
-''')
-            recorder.chmod(0o755)
-            notify = temp / 'omarchy-notification-send'
-            notify.write_text('#!/bin/sh\nexit 0\n')
-            notify.chmod(0o755)
-            args_file = temp / 'args.json'
-            env = dict(os.environ, HOME=folder, PATH=f'{folder}:/usr/bin:/bin',
-                       OMARCHY_SCREENRECORD_DIR=folder, CAPTURE_TEST_ARGS=str(args_file))
-            for audio in ('', 'default_output', 'default_input', 'default_output|default_input', 'device:alsa_input.usb-headset', 'default_output|device:alsa_input.usb-headset'):
-                with self.subTest(audio=audio):
-                    result = subprocess.run(['bash', '-c', script, 'bash', 'rect', '640x480+0+0', audio],
-                                            env=env, capture_output=True, text=True, timeout=4)
-                    self.assertEqual(result.returncode, 0, result.stderr)
-                    self.assertIn('STARTED', result.stdout)
-                    args = json.loads(args_file.read_text())
-                    self.assertEqual(args[args.index('-w') + 1], '640x480+0+0')
-                    if audio:
-                        self.assertEqual(args[args.index('-a') + 1], audio)
-                        self.assertEqual(args[args.index('-ac') + 1], 'aac')
-                        self.assertEqual(args.count('-a'), 1)
-                    else:
-                        self.assertNotIn('-a', args)
-                        self.assertNotIn('-ac', args)
+        for desktop in (False, True):
+            for microphone in (False, True):
+                for source in ('', 'alsa_input.usb-headset'):
+                    with self.subTest(desktop=desktop, microphone=microphone, source=source):
+                        data = dict(desktop=desktop, microphone=microphone, input=source)
+                        cmd = backend.recorder_arguments(data, '10,20 640x480', 17)
+                        self.assertEqual(cmd[0], '/usr/bin/gpu-screen-recorder')
+                        self.assertEqual(cmd[cmd.index('-w') + 1], 'region')
+                        self.assertEqual(cmd[cmd.index('-region') + 1], '640x480+10+20')
+                        self.assertEqual(cmd[cmd.index('-o') + 1], '/proc/self/fd/17')
+                        self.assertEqual(cmd[cmd.index('-c') + 1], 'mp4')
+                        expected = []
+                        if desktop: expected.append('default_output')
+                        if microphone: expected.append('device:' + source if source else 'default_input')
+                        if expected:
+                            self.assertEqual(cmd[cmd.index('-a') + 1], '|'.join(expected))
+                            self.assertEqual(cmd[cmd.index('-ac') + 1], 'aac')
+                        else:
+                            self.assertNotIn('-a', cmd)
+    def test_input_cannot_add_sources_or_options(self):
+        for source in ('bad|default_output', '-option', 'bad;options', 'bad\nname'):
+            with self.assertRaises(CaptureError):
+                backend.audio_arguments(dict(desktop=False, microphone=True, input=source))
+    def test_monitor_resolution_cap(self):
+        cmd = backend.recorder_arguments(dict(desktop=False, microphone=False),
+                                        dict(name='DP-1', width=5120, height=2880), 8)
+        self.assertEqual(cmd[cmd.index('-s') + 1], '3840x2160')
 
-
-if __name__ == '__main__':
-    unittest.main()
+if __name__ == '__main__': unittest.main()

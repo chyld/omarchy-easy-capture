@@ -1,0 +1,6 @@
+singleton CaptureService 1.0 CaptureService.qml
+BarWidget 1.0 BarWidget.qml
+CapturePanel 1.0 CapturePanel.qml
+CaptureButton 1.0 CaptureButton.qml
+CaptureButtonGroup 1.0 CaptureButtonGroup.qml
+BackendProcess 1.0 BackendProcess.qml
