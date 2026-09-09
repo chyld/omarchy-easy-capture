@@ -1,0 +1,20 @@
+{
+  "schemaVersion": 1,
+  "id": "chyld.easy-capture",
+  "name": "Omarchy Easy Capture",
+  "version": "0.3.0",
+  "author": "chyld",
+  "license": "MIT",
+  "description": "Pick a region, app, or monitor, then screenshot or record with a live timer and a stop control",
+  "kinds": ["bar-widget"],
+  "entryPoints": {
+    "barWidget": "BarWidget.qml"
+  },
+  "barWidget": {
+    "displayName": "Easy Capture",
+    "description": "Screenshot or record a region, app, or monitor",
+    "category": "Utilities",
+    "allowMultiple": false,
+    "defaultSection": "right"
+  }
+}
