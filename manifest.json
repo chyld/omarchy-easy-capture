@@ -5,7 +5,7 @@
   "version": "0.3.0",
   "author": "chyld",
   "license": "MIT",
-  "description": "Pick a region, app, or monitor, then screenshot or record with a live timer and a stop control",
+  "description": "Turn any moment on your screen into a screenshot or recording. Capture regions, apps, or monitors from your Omarchy bar, with optional desktop sound, microphone selection, and app capture across screens.",
   "kinds": ["bar-widget"],
   "entryPoints": {
     "barWidget": "BarWidget.qml"

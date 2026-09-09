@@ -1,9 +1,6 @@
 # Easy Capture
 
-Screenshots and recordings from one camera icon in your [Omarchy](https://omarchy.org)
-bar. Choose a region, an app, or a monitor, then click **Capture!** Record desktop
-sound, your microphone, or both. App selection works across monitors, so you can
-start on one screen and capture a window on another.
+Turn any moment on your screen into a screenshot or recording. Capture regions, apps, or monitors from your Omarchy bar, with optional desktop sound, microphone selection, and app capture across screens.
 
 ![Easy Capture showing the Record tab, capture targets, audio controls, and microphone input selection](preview.png)
 
