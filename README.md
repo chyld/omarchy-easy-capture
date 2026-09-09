@@ -1,6 +1,6 @@
 # Easy Capture
 
-Turn any moment on your screen into a screenshot or recording. Capture regions, apps, or monitors from your Omarchy bar, with optional desktop sound, microphone selection, and app capture across screens.
+Capture your screen in a few clicks, without memorizing hotkeys. Screenshot or record regions, apps, or monitors straight from your Omarchy bar, with optional desktop sound, microphone selection, and app capture across screens.
 
 ![Easy Capture showing the Record tab, capture targets, audio controls, and microphone input selection](preview.png)
 
