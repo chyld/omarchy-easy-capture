@@ -142,7 +142,7 @@ Panel {
           Text {
             textFormat: Text.PlainText
             text: "Easy Capture"
-            color: root.barForeground
+            color: Color.popups.text
             font.family: root.panelFontFamily
             font.pixelSize: Style.font.body * 0.9
             font.bold: true
@@ -152,7 +152,7 @@ Panel {
             width: parent.width
             equalWidth: true
             fontFamily: root.panelFontFamily
-            foreground: root.barForeground
+            foreground: Color.popups.text
             options: [{value: "screenshot", label: "Screenshot", icon: ""}, {value: "record", label: "Record", icon: ""}]
             value: root.captureMode
             onCursorIndexChanged: if (cursorIndex >= 0) root.reveal(this)
@@ -166,13 +166,13 @@ Panel {
           Column {
             width: parent.width
             spacing: Style.space(6)
-            PanelSectionHeader { fontSize: Style.font.caption * 0.9; text: "target"; foreground: root.barForeground }
+            PanelSectionHeader { fontSize: Style.font.caption * 0.9; text: "target"; foreground: Color.popups.text }
             CaptureButtonGroup {
               objectName: "targetButtons"
               width: parent.width
               equalWidth: true
               fontFamily: root.panelFontFamily
-              foreground: root.barForeground
+              foreground: Color.popups.text
               options: [{value: "region", label: "Region", icon: "󰆟"}, {value: "app", label: "App", icon: "󰖯"}, {value: "monitor", label: "Monitor", icon: "󰍹"}]
               value: root.targetType
               onCursorIndexChanged: if (cursorIndex >= 0) root.reveal(this)
@@ -195,7 +195,7 @@ Panel {
                   width: parent.width
                   leftAlign: true
                   fontFamily: root.panelFontFamily
-                  foreground: root.barForeground
+                  foreground: Color.popups.text
                   iconText: "󰍹"
                   text: modelData.name
                   selected: root.selectedMonitor === modelData.name
@@ -209,7 +209,7 @@ Panel {
                 textFormat: Text.PlainText
                 visible: root.monitorList.length === 0
                 text: "No monitors found"
-                color: root.barForeground
+                color: Color.popups.text
                 font.family: root.panelFontFamily
                 font.pixelSize: Style.font.bodySmall * 0.9
               }
@@ -220,7 +220,7 @@ Panel {
             visible: root.captureMode === "record"
             width: parent.width
             spacing: Style.space(6)
-            PanelSectionHeader { fontSize: Style.font.caption * 0.9; text: "audio"; foreground: root.barForeground }
+            PanelSectionHeader { fontSize: Style.font.caption * 0.9; text: "audio"; foreground: Color.popups.text }
             Repeater {
               model: ["Desktop sounds", "Microphone"]
               delegate: CaptureButton {
@@ -232,10 +232,10 @@ Panel {
                 leftAlign: true
                 text: modelData + " · " + (checked ? "On" : "Off")
                 iconText: index === 0 ? (checked ? "" : "") : (checked ? "󰍬" : "󰍭")
-                iconColor: checked ? Style.selectedStateColor(root.barForeground, Color.accent) : Color.urgent
+                iconColor: checked ? Style.selectedStateColor(Color.popups.text, Color.accent) : Color.urgent
                 selected: checked
                 fontFamily: root.panelFontFamily
-                foreground: root.barForeground
+                foreground: Color.popups.text
                 onHasCursorChanged: if (hasCursor) root.reveal(this)
                 hasCursor: root.focusSection === "audio" && root.selectedIndex === index
                 onHovered: function(hovered) { if (hovered) root.setCursor("audio", index) }
@@ -252,7 +252,7 @@ Panel {
               visible: root.showMicrophonePicker
               fontSize: Style.font.caption * 0.9
               text: "microphone input"
-              foreground: root.barForeground
+              foreground: Color.popups.text
             }
             Column {
               visible: root.showMicrophonePicker
@@ -268,7 +268,7 @@ Panel {
                   text: modelData.label
                   selected: root.service && root.service.selectedMicrophone === modelData.name
                   fontFamily: root.panelFontFamily
-                  foreground: root.barForeground
+                  foreground: Color.popups.text
                   onHasCursorChanged: if (hasCursor) root.reveal(this)
                   hasCursor: root.focusSection === "microphone" && root.selectedIndex === index
                   onHovered: function(hovered) { if (hovered) root.setCursor("microphone", index) }
@@ -282,7 +282,7 @@ Panel {
               width: parent.width
               text: root.microphoneInputs.length ? root.microphoneInputs[0].label : ""
               wrapMode: Text.Wrap
-              color: root.barForeground
+              color: Color.popups.text
               font.family: root.panelFontFamily
               font.pixelSize: Style.font.bodySmall * 0.9
             }
@@ -292,7 +292,7 @@ Panel {
               width: parent.width
               text: root.service ? root.service.microphoneMessage : ""
               wrapMode: Text.Wrap
-              color: root.barForeground
+              color: Color.popups.text
               font.family: root.panelFontFamily
               font.pixelSize: Style.font.bodySmall * 0.9
             }
@@ -307,14 +307,14 @@ Panel {
             font.pixelSize: Style.font.bodySmall * 0.9
             wrapMode: Text.Wrap
           }
-          PanelSeparator { width: parent.width; foreground: root.barForeground }
+          PanelSeparator { width: parent.width; foreground: Color.popups.text }
           CaptureButton {
             objectName: "captureButton"
             width: parent.width
             text: "Capture!"
             enabled: root.canStart
             fontFamily: root.panelFontFamily
-            foreground: root.barForeground
+            foreground: Color.popups.text
             onHasCursorChanged: if (hasCursor) root.reveal(this)
             hasCursor: root.focusSection === "capture"
             onHovered: function(hovered) { if (hovered) root.setCursor("capture", 0) }
@@ -324,7 +324,7 @@ Panel {
             textFormat: Text.PlainText
             visible: root.targetType === "monitor" && !root.selectedMonitor
             text: "Pick a monitor first"
-            color: root.barForeground
+            color: Color.popups.text
             opacity: 0.6
             font.family: root.panelFontFamily
             font.pixelSize: Style.font.bodySmall * 0.9
