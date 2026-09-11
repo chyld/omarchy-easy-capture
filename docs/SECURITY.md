@@ -7,6 +7,16 @@ The review treats device names, window geometry, configuration files, child outp
 and same-user filesystem interference as untrusted inputs. Applying the skill and
 passing the baseline scanner are not a marketplace approval or an independent audit.
 
+## Changes from 0.4.0
+
+- Added an opt-in Zipline screenshot upload. It is the plugin's only network
+  client and runs only when the user enables Share and configures a server.
+- Added a private settings file (`zipline.json`, 0600, atomic write) holding the
+  server URL and API token. The token is read only for an upload request and never
+  emitted as an event, notification, or log line.
+- The server URL must use `https://`; the multipart body, response (128 KiB cap),
+  and returned link are bounded and validated before use.
+
 ## Changes from 0.3.0
 
 - Moved state out of individual bar widgets into one internal singleton service.
@@ -35,6 +45,8 @@ passing the baseline scanner are not a marketplace approval or an independent au
 | Recording | 15-second startup; eight hours; 16 GiB stop threshold |
 | Finalization | Ten seconds; kernel ceiling at 16 GiB + 16 MiB |
 | Clipboard provider | At most eight hours, attached to the screenshot helper |
+| Share settings | 8 KiB config file; URL ≤2048, token ≤4096; `https://` required |
+| Zipline upload | 30-second request deadline; 128 KiB response cap; result URL ≤2048 |
 | Discovery retry | Exponential backoff, four consecutive failures |
 
 ## Verification
@@ -53,8 +65,10 @@ The marketplace baseline is run against the final pushed commit, using scanner r
 ## Trust and compatibility
 
 System tools and the installed, reviewed plugin code remain trusted. Linux display,
-audio and D-Bus endpoints are inherited from the desktop session. No remote endpoint,
-credentials, privileges or package-install action is part of the plugin.
+audio and D-Bus endpoints are inherited from the desktop session. The opt-in Zipline
+upload is the only remote endpoint; it uses the URL and token the user supplies, over
+HTTPS only. No other remote endpoint, credential, privilege or package-install action
+is part of the plugin.
 
 Output directories and XDG configuration with symlink components or unsafe permissions
 are refused. Anonymous-file support is required. These restrictions protect capture

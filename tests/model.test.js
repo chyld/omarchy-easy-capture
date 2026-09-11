@@ -19,3 +19,16 @@ test('event names and benign phase messages', () => {
   assert.equal(model.name('bad|input'),false);
   assert.equal(model.name('-option'),false);
 });
+test('share and config events are bounded and validated', () => {
+  assert.equal(model.event('{"event":"shared","url":"https://zipline.example/r/abc"}').url,'https://zipline.example/r/abc');
+  assert.equal(model.event('{"event":"share_error","message":"Share upload failed"}').message,'Share upload failed');
+  assert.equal(model.event('{"event":"config","server":"https://zipline.example?a=1&b=2","token":"abc"}').server,'https://zipline.example?a=1&b=2');
+  assert.equal(model.event('{"event":"config_saved"}').event,'config_saved');
+  for (const bad of [
+    {event:'shared',url:'http://zipline.example/r/abc'},
+    {event:'shared',url:'https://x/'.padEnd(2050,'a')},
+    {event:'shared',url:'https://x/\u0000'},
+    {event:'share_error',message:'bad\ntext'},
+    {event:'config',server:'https://x',token:'bad\u0000'}
+  ]) assert.throws(() => model.event(JSON.stringify(bad)));
+});

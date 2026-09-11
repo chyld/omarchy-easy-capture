@@ -2,15 +2,17 @@
   "schemaVersion": 1,
   "id": "chyld.easy-capture",
   "name": "Easy Capture",
-  "version": "0.4.0",
+  "version": "0.5.0",
   "author": "chyld",
   "license": "MIT",
-  "description": "Capture your screen in a few clicks, without memorizing hotkeys. Screenshot or record regions, apps, or monitors straight from your Omarchy bar, with optional desktop sound, microphone selection, and app capture across screens.",
+  "description": "Capture your screen in a few clicks, without memorizing hotkeys. Screenshot or record regions, apps, or monitors straight from your Omarchy bar, with optional desktop sound, microphone selection, app capture across screens, and one-click sharing to your Zipline server.",
   "kinds": [
-    "bar-widget"
+    "bar-widget",
+    "overlay"
   ],
   "entryPoints": {
-    "barWidget": "BarWidget.qml"
+    "barWidget": "BarWidget.qml",
+    "overlay": "ShareSettingsPrompt.qml"
   },
   "barWidget": {
     "displayName": "Easy Capture",

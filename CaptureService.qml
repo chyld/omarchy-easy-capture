@@ -14,6 +14,12 @@ Item {
   property string microphoneMessage: ""
   property string errorMessage: ""
   property string lastSaved: ""
+  property string shareUrl: ""
+  property string shareError: ""
+  property bool share: false
+  property string shareServer: ""
+  property string shareToken: ""
+  readonly property bool configLoading: configProcess.running
   property string phase: "idle"
   property double recordingStartTime: 0
   property int elapsedSeconds: 0
@@ -50,7 +56,7 @@ Item {
     pendingRequest = null
     readyToLaunch = false
     fadeDelay.stop()
-    monitorsProcess.cancel(); microphonesProcess.cancel(); captureProcess.cancel()
+    monitorsProcess.cancel(); microphonesProcess.cancel(); captureProcess.cancel(); configProcess.cancel()
     phase = "idle"
   }
   function setPanelVisible(token, visible) {
@@ -94,7 +100,8 @@ Item {
     if (!active || !panelVisible || !canStart || ["screenshot", "record"].indexOf(action) < 0) return false
     pendingRequest = {action: action, target: targetType, monitor: selectedMonitor,
       desktop: action === "record" && desktopAudio, microphone: action === "record" && microphoneAudio,
-      input: action === "record" && microphoneAudio ? selectedMicrophone : ""}
+      input: action === "record" && microphoneAudio ? selectedMicrophone : "",
+      share: action === "screenshot" && share}
     errorMessage = ""
     captureOutcome = false
     phase = "preparing"
@@ -109,6 +116,15 @@ Item {
     var data = pendingRequest
     pendingRequest = null
     captureProcess.launch("capture", data)
+  }
+  function loadConfig() {
+    if (!active || configProcess.running) return
+    configProcess.launch("config", {server: "", token: ""})
+  }
+  function saveConfig(server, token) {
+    if (!active || configProcess.running) return false
+    configProcess.launch("config", {server: server, token: token})
+    return true
   }
   function stopRecording() {
     if (phase !== "recording") return
@@ -171,6 +187,12 @@ Item {
         lastSaved = data.name
         errorMessage = data.warning
         phase = "idle"
+      } else if (data.event === "shared") {
+        shareUrl = data.url
+        shareError = ""
+      } else if (data.event === "share_error") {
+        shareUrl = ""
+        shareError = data.message
       } else if (data.event === "cancelled") {
         captureOutcome = true
         phase = "idle"
@@ -199,5 +221,21 @@ Item {
     running: root.recording
     onTriggered: root.elapsedSeconds = Math.max(0, Math.floor((Date.now() - root.recordingStartTime) / 1000))
   }
-  Component.onDestruction: { monitorsProcess.cancel(); microphonesProcess.cancel(); captureProcess.cancel() }
+  BackendProcess {
+    id: configProcess
+    onMessage: function(data) {
+      if (!root.active) return
+      if (data.event === "config") {
+        root.shareServer = data.server
+        root.shareToken = data.token
+      } else if (data.event === "error") {
+        root.shareError = data.message
+      }
+    }
+    onFinished: function(code) {
+      if (!root.active) return
+      if (code !== 0 && root.shareError === "") root.shareError = "Could not configure share settings"
+    }
+  }
+  Component.onDestruction: { monitorsProcess.cancel(); microphonesProcess.cancel(); captureProcess.cancel(); configProcess.cancel() }
 }

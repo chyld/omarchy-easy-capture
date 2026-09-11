@@ -29,6 +29,7 @@ Panel {
     if (showMonitorList && monitorList.length) sections.push("monitor")
     if (captureMode === "record") sections.push("audio")
     if (showMicrophonePicker) sections.push("microphone")
+    if (captureMode === "screenshot") sections.push("share")
     sections.push("capture")
     return sections
   }
@@ -54,9 +55,9 @@ Panel {
     if (section === "target") return 3
     if (section === "monitor") return monitorList.length
     if (section === "microphone") return microphoneOptions.length
+    if (section === "share") return 2
     return 1
-  }
-  function normalizeCursor() {
+  }  function normalizeCursor() {
     if (visibleSections.indexOf(focusSection) < 0) setCursor("target", 0)
     selectedIndex = Math.max(0, Math.min(selectedIndex, sectionCount(focusSection) - 1))
   }
@@ -66,7 +67,7 @@ Panel {
   onOpenedChanged: if (opened) setCursor("mode", modeValues.indexOf(captureMode))
 
   function moveCursor(dy) {
-    var vertical = focusSection === "monitor" || focusSection === "audio" || focusSection === "microphone"
+    var vertical = focusSection === "monitor" || focusSection === "audio" || focusSection === "microphone" || focusSection === "share"
     var next = selectedIndex + dy
     if (vertical && next >= 0 && next < sectionCount(focusSection)) {
       selectedIndex = next
@@ -96,6 +97,13 @@ Panel {
     if (index === 0) service.desktopAudio = !service.desktopAudio
     else service.microphoneAudio = !service.microphoneAudio
   }
+  function toggleShare() {
+    if (service) service.share = !service.share
+  }
+  function openShareSettings() {
+    var shell = root.bar ? root.bar.shell : null
+    if (shell && typeof shell.summon === "function") shell.summon(root.moduleName, "{}")
+  }
   function activateCursor() {
     if (!service) return
     if (focusSection === "mode") service.captureMode = modeValues[selectedIndex]
@@ -103,6 +111,8 @@ Panel {
     else if (focusSection === "monitor" && monitorList[selectedIndex]) service.setSelectedMonitor(monitorList[selectedIndex].name)
     else if (focusSection === "audio") toggleAudio(selectedIndex)
     else if (focusSection === "microphone" && microphoneOptions[selectedIndex]) service.setSelectedMicrophone(microphoneOptions[selectedIndex].name)
+    else if (focusSection === "share" && selectedIndex === 0) toggleShare()
+    else if (focusSection === "share" && selectedIndex === 1) openShareSettings()
     else if (focusSection === "capture" && canStart) service.startCapture(captureMode)
   }
 
@@ -293,6 +303,44 @@ Panel {
               text: root.service ? root.service.microphoneMessage : ""
               wrapMode: Text.Wrap
               color: Color.popups.text
+              font.family: root.panelFontFamily
+              font.pixelSize: Style.font.bodySmall * 0.9
+            }
+          }
+          Column {
+            objectName: "shareOptions"
+            visible: root.captureMode === "screenshot"
+            width: parent.width
+            spacing: Style.space(6)
+            PanelSectionHeader { fontSize: Style.font.caption * 0.9; text: "share"; foreground: Color.popups.text }
+            Repeater {
+              model: ["Share to Zipline", "Settings…"]
+              delegate: CaptureButton {
+                required property string modelData
+                required property int index
+                readonly property bool checked: root.service ? root.service.share : false
+                objectName: index === 0 ? "shareToggle" : "shareSettings"
+                width: parent.width
+                leftAlign: true
+                text: index === 0 ? modelData + " · " + (checked ? "On" : "Off") : modelData
+                iconText: index === 0 ? (checked ? "" : "") : ""
+                iconColor: checked ? Style.selectedStateColor(Color.popups.text, Color.accent) : Color.popups.text
+                selected: index === 0 ? checked : false
+                fontFamily: root.panelFontFamily
+                foreground: Color.popups.text
+                onHasCursorChanged: if (hasCursor) root.reveal(this)
+                hasCursor: root.focusSection === "share" && root.selectedIndex === index
+                onHovered: function(hovered) { if (hovered) root.setCursor("share", index) }
+                onClicked: index === 0 ? root.toggleShare() : root.openShareSettings()
+              }
+            }
+            Text {
+              textFormat: Text.PlainText
+              visible: root.service ? (root.service.shareUrl !== "" || root.service.shareError !== "") : false
+              width: parent.width
+              text: root.service ? (root.service.shareUrl !== "" ? root.service.shareUrl : root.service.shareError) : ""
+              wrapMode: Text.Wrap
+              color: root.service && root.service.shareError !== "" ? Color.urgent : Color.popups.text
               font.family: root.panelFontFamily
               font.pixelSize: Style.font.bodySmall * 0.9
             }

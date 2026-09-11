@@ -1,10 +1,19 @@
 # Easy Capture
 
-Capture your screen in a few clicks, without memorizing hotkeys. Screenshot or record regions, apps, or monitors straight from your Omarchy bar, with optional desktop sound, microphone selection, and app capture across screens.
+Capture your screen in a few clicks, without memorizing hotkeys. Screenshot or record regions, apps, or monitors straight from your Omarchy bar, with optional desktop sound, microphone selection, app capture across screens, and one-click sharing to your Zipline server.
 
 ![Easy Capture showing the Record tab, capture targets, audio controls, and microphone input selection](preview.png)
 
 Captures stay on your computer. Audio is off until you enable it.
+
+## New in 0.5.0
+
+- Optional **Share** toggle for screenshots: upload the finished PNG to your
+  Zipline server and copy the share link straight to the clipboard.
+- A Zipline settings prompt (server URL and API token) stored in a private
+  0600 config file; the token is never logged or shown in notifications.
+- Off by default. Nothing is uploaded unless you turn Share on and configure a
+  server.
 
 ## New in 0.4.0
 
@@ -45,12 +54,12 @@ Removing the last widget cancels its active picker or capture and stops owned
 helper, recorder, freeze and clipboard processes. Finish a recording with the
 Stop control first if you want to save it: cancelled captures are discarded.
 
-Removal deletes `~/.config/omarchy/plugins/chyld.easy-capture/`. Completed captures
-remain in their output directories. Installed capture tools remain installed.
-Quickshell runtime logs under `$XDG_RUNTIME_DIR/quickshell/` and its managed cache
-may remain. There are no plugin credentials, persistent settings, service units,
-shared configuration edits, or privilege grants to remove. Clipboard managers
-may independently retain copied images.
+Removal deletes `~/.config/omarchy/plugins/chyld.easy-capture/`, including the
+private Zipline `zipline.json` (server URL and token). Completed captures remain
+in their output directories. Installed capture tools remain installed. Quickshell
+runtime logs under `$XDG_RUNTIME_DIR/quickshell/` and its managed cache may remain.
+There are no service units, shared configuration edits, or privilege grants to
+remove. Clipboard managers may independently retain copied images.
 
 ## What it shows
 
@@ -60,6 +69,7 @@ may independently retain copied images.
 - Desktop sound and microphone toggles under Record; muted icons are red.
 - Named microphone inputs plus **System default** when multiple inputs are available.
 - A pulsing red dot and timer on each bar while recording; click a camera icon to stop.
+- A **Share** toggle and **Settings…** entry under Screenshot for Zipline uploads.
 
 Choose your target and audio options, then click **Capture!** Changing a tab or
 target alone does not start a capture. Region and App open the picker after the
@@ -103,6 +113,21 @@ to finalize. Recordings stop at eight hours or the 16 GiB size threshold. A kern
 file-size ceiling allows at most 16 MiB of finalization overhead. Failed or
 cancelled captures are not published as completed files.
 
+## Sharing to Zipline
+
+Screenshots have a **Share** toggle. When it is on and a server is configured, the
+finished PNG is uploaded to your [Zipline](https://zipline.diced.sh/) instance and
+the returned link replaces the clipboard image, so the next paste shares the link
+instead of the file. Recordings are never uploaded.
+
+Choose **Settings…** to enter your **Server URL** (must start with `https://`) and
+your **API token**. Zipline authenticates API calls with the raw token in the
+`Authorization` header; find it in your dashboard under your user menu. Settings
+live in `~/.config/omarchy/plugins/chyld.easy-capture/zipline.json`, written
+atomically with `0600` permissions and never logged. If upload fails, the
+screenshot is still saved and the clipboard image is kept; a short error appears
+in the panel.
+
 ## Data, network, and execution
 
 Screenshots go to `~/Pictures` or `$OMARCHY_SCREENSHOT_DIR`; recordings go to
@@ -119,11 +144,17 @@ application replaces the clipboard, another capture begins, the plugin is remove
 the shell restarts, or eight hours elapse. Notifications identify saved filenames;
 they contain no persisted executable actions or image paths.
 
-The plugin has no upload, analytics, or network client. Device/window metadata comes
-from local `hyprctl` and `pactl` commands. All tool paths are fixed under `/usr/bin`.
-Python runs with `-I -S -B`; children receive only the required local desktop,
-locale, home and output-directory settings, rather than the ambient environment.
-Raw tool errors and capture contents are not sent to the shell log.
+The plugin has no analytics or telemetry. Its only network client is the
+opt-in Zipline upload: a single HTTPS `POST` to the configured server path
+`/api/upload`, carrying the screenshot and the `Authorization` token header. The
+server URL must use `https://`; the response, the multipart body, and the returned
+link are all size-bounded and validated. The token is read from the private config
+file only for that request. Device/window metadata comes from local `hyprctl` and
+`pactl` commands. All tool paths are fixed under `/usr/bin`. Python runs with
+`-I -S -B`; children receive only the required local desktop, locale, home and
+output-directory settings, rather than the ambient environment. Raw tool errors
+and capture contents are not sent to the shell log, and the token never appears in
+events or notifications.
 
 Metadata output is capped at 1 MiB per command before parsing; display lists are
 limited to 16 entries, microphone inputs to 32, and window discovery to 512.

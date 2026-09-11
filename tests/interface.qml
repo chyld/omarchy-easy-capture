@@ -23,6 +23,7 @@ Scope {
     property var monitors: [{name:"DP-1"},{name:"DP-2"}]
     property string phase: "idle"
     property string captured: ""
+    property bool share: false
     readonly property bool canStart: targetType !== "monitor" || selectedMonitor !== ""
     function setSelectedMicrophone(value) { selectedMicrophone = value }
     function setTargetType(value) { targetType = value }
@@ -54,6 +55,11 @@ Scope {
     check(host.captured === "record", "record trigger")
     panel.setCursor("mode", 0); panel.activateCursor()
     check(panel.visibleSections.indexOf("audio") < 0, "audio hidden on screenshots")
+    check(panel.visibleSections.indexOf("share") >= 0, "share shown on screenshots")
+    panel.setCursor("share", 0); panel.activateCursor()
+    check(host.share, "share toggle on")
+    panel.setCursor("share", 0); panel.activateCursor()
+    check(!host.share, "share toggle off")
     panel.setCursor("capture", 0); panel.activateCursor()
     check(host.captured === "screenshot", "screenshot trigger")
     panel.tabCursor(1); check(panel.focusSection === "mode", "tab wraps")
