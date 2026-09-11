@@ -1,4 +1,5 @@
 """Bounded child processes and descriptor-owned capture files (Linux only)."""
+import json
 import os
 import pwd
 import re
@@ -245,6 +246,90 @@ def open_directory(path, *, create=False):
     except BaseException:
         os.close(fd)
         raise
+
+
+def plugin_config_directory(env):
+    """The review directory for this plugin's private settings."""
+    base = env.get('XDG_CONFIG_HOME') or (env['HOME'] + '/.config')
+    if not isinstance(base, str) or not base.startswith('/') or len(base) > 4096:
+        raise CaptureError('Invalid plugin config base')
+    return base.rstrip('/') + '/omarchy/plugins/chyld.easy-capture'
+
+
+def validate_zipline(server, token):
+    """Bounded share-server credentials; no control characters or secrets kept local."""
+    if not isinstance(server, str) or not isinstance(token, str):
+        raise CaptureError('Invalid share settings')
+    if not server.startswith('https://') or len(server) > 2048:
+        raise CaptureError('Share server must be an https URL')
+    if not token or len(token) > 4096:
+        raise CaptureError('Share token is missing or too long')
+    if re.search(r'[\x00-\x1f\x7f]', server + token):
+        raise CaptureError('Share settings contain control characters')
+    return server, token
+
+
+def read_zipline_config(env):
+    """Return (server, token) from the private 0600 config file, or None."""
+    directory = plugin_config_directory(env)
+    path = directory + '/zipline.json'
+    try:
+        dfd = open_directory(directory)
+    except FileNotFoundError:
+        return None
+    try:
+        try:
+            fd = os.open('zipline.json', os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK | os.O_CLOEXEC, dir_fd=dfd)
+        except FileNotFoundError:
+            return None
+        try:
+            info = os.fstat(fd)
+            if not stat.S_ISREG(info.st_mode) or info.st_uid != os.getuid() or info.st_nlink != 1 or info.st_size > 8192:
+                raise CaptureError('Unsafe share settings file')
+            data = bytearray()
+            while len(data) <= 8192:
+                chunk = os.read(fd, 8193 - len(data))
+                if not chunk:
+                    break
+                data.extend(chunk)
+            if len(data) > 8192:
+                raise CaptureError('Share settings exceeded limit')
+        finally:
+            os.close(fd)
+    finally:
+        os.close(dfd)
+    try:
+        parsed = json.loads(bytes(data).decode('utf-8', 'strict'))
+    except (ValueError, UnicodeDecodeError):
+        raise CaptureError('Invalid share settings file')
+    if not isinstance(parsed, dict) or set(parsed) != {'server', 'token'}:
+        raise CaptureError('Invalid share settings file')
+    return validate_zipline(parsed['server'], parsed['token'])
+
+
+def write_zipline_config(env, server, token):
+    """Atomically persist credentials to a private 0600 file."""
+    validate_zipline(server, token)
+    fd = open_directory(plugin_config_directory(env), create=True)
+    try:
+        payload = json.dumps({'server': server, 'token': token}, ensure_ascii=True, separators=(',', ':')).encode('utf-8')
+        if len(payload) > 8192:
+            raise CaptureError('Share settings exceeded limit')
+        tmp = os.open('.zipline.tmp', os.O_RDWR | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW | os.O_CLOEXEC, 0o600, dir_fd=fd)
+        try:
+            view = memoryview(payload)
+            while view:
+                count = os.write(tmp, view)
+                if count <= 0:
+                    raise CaptureError('Could not write share settings')
+                view = view[count:]
+            os.fsync(tmp)
+        finally:
+            os.close(tmp)
+        os.replace('.zipline.tmp', 'zipline.json', src_dir_fd=fd, dst_dir_fd=fd)
+        os.fsync(fd)
+    finally:
+        os.close(fd)
 
 
 def read_config(env):

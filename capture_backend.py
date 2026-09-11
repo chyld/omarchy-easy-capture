@@ -12,7 +12,11 @@ import time
 # -I excludes cwd and ambient Python paths. Only our reviewed sibling module
 # is added; all other imports above are the system standard library.
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from capture_runtime import CaptureError, Cancelled, CaptureFile, Control, Runner, output_directory
+from capture_runtime import (CaptureError, Cancelled, CaptureFile, Control, Runner,
+                             output_directory, read_zipline_config, write_zipline_config,
+                             validate_zipline)
+
+import http.client
 
 MAX_JSON = 1048576
 MAX_EVENT = 32768
@@ -193,18 +197,20 @@ def app_rectangles(runner, displays):
 
 def request(raw):
     data = document(raw)
-    keys = {'action', 'target', 'monitor', 'desktop', 'microphone', 'input'}
+    keys = {'action', 'target', 'monitor', 'desktop', 'microphone', 'input', 'share'}
     if not isinstance(data, dict) or set(data) != keys:
         raise CaptureError('Invalid capture request')
     if data['action'] not in ('screenshot', 'record') or data['target'] not in ('region', 'app', 'monitor'):
         raise CaptureError('Invalid capture action')
-    if type(data['desktop']) is not bool or type(data['microphone']) is not bool:
-        raise CaptureError('Invalid audio options')
+    if type(data['desktop']) is not bool or type(data['microphone']) is not bool or type(data['share']) is not bool:
+        raise CaptureError('Invalid capture options')
     for name in ('monitor', 'input'):
         if data[name] != '':
             safe_name(data[name])
     if data['action'] == 'screenshot' and (data['desktop'] or data['microphone'] or data['input']):
         raise CaptureError('Screenshots cannot enable audio')
+    if data['action'] == 'record' and data['share']:
+        raise CaptureError('Share applies to screenshots only')
     return data
 
 
@@ -241,6 +247,101 @@ def notify(runner, title, body):
         runner.run(['/usr/bin/notify-send', '--app-name=Easy Capture', '--', title, label(body)], limit=1024, timeout=3)
     except (OSError, CaptureError):
         pass
+
+
+def copy_url(runner, url):
+    """Offer a bounded share URL to the clipboard and hold ownership, like the
+    image path: wl-copy reads a small memfd to EOF and then serves it."""
+    fd = os.memfd_create('easy-capture-url', os.MFD_CLOEXEC)
+    child = None
+    try:
+        if len(url) > 2048:
+            raise CaptureError('Could not copy the share link')
+        payload = (url + '\n').encode('ascii', 'strict')
+        os.write(fd, payload)
+        os.lseek(fd, 0, os.SEEK_SET)
+        child = runner.start(['/usr/bin/wl-copy', '--foreground', '--type', 'text/plain'],
+                             stdin=fd, stdout=subprocess.DEVNULL)
+        emit('phase', phase='clipboard')
+        deadline = time.monotonic() + MAX_DURATION
+        while not child.exited():
+            runner.check()
+            if time.monotonic() > deadline:
+                break
+            time.sleep(0.05)
+        code = runner.release(child)
+        child = None
+        if code:
+            raise CaptureError('Screenshot shared, but the clipboard copy failed')
+    finally:
+        if child:
+            runner.release(child)
+        os.close(fd)
+
+
+def share_body(name, fd):
+    """Build a bounded multipart body from the published screenshot descriptor."""
+    import mimetypes
+    import secrets
+    info = os.fstat(fd)
+    if not info.st_size or not 0 < info.st_size <= MAX_SCREENSHOT:
+        raise CaptureError('Invalid screenshot for upload')
+    os.lseek(fd, 0, os.SEEK_SET)
+    boundary = 'easycapture' + secrets.token_hex(16)
+    payload = os.pread(fd, info.st_size, 0)
+    mime = str(mimetypes.guess_type(name)[0] or 'application/octet-stream')
+    head = ('--' + boundary + '\r\n'
+            'Content-Disposition: form-data; name="files"; filename="' + name + '"\r\n'
+            'Content-Type: ' + mime + '\r\n\r\n').encode('utf-8')
+    tail = ('\r\n--' + boundary + '--\r\n').encode('utf-8')
+    if len(head) + len(payload) + len(tail) > MAX_SCREENSHOT + 65536:
+        raise CaptureError('Screenshot too large to share')
+    return boundary, head + payload + tail
+
+
+def upload_zipline(runner, env, output):
+    """POST the completed screenshot to the configured share server."""
+    credentials = read_zipline_config(env)
+    if credentials is None:
+        raise CaptureError('No share server configured')
+    server, token = credentials
+    try:
+        boundary, body = share_body(output.name, output.fd)
+    except OSError:
+        raise CaptureError('Could not read screenshot for upload')
+    host = server[len('https://'):].rstrip('/')
+    try:
+        connection = http.client.HTTPSConnection(host, timeout=30)
+        connection.putrequest('POST', '/api/upload', skip_accept_encoding=True)
+        connection.putheader('Authorization', token)
+        connection.putheader('Content-Type', 'multipart/form-data; boundary=' + boundary)
+        connection.putheader('Content-Length', str(len(body)))
+        connection.endheaders()
+        connection.send(body)
+        response = connection.getresponse()
+        raw = response.read(131073)
+        status = response.status
+        connection.close()
+    except (OSError, ValueError):
+        raise CaptureError('Share upload failed')
+    if not raw or len(raw) > 131072:
+        raise CaptureError('Share server response exceeded limit')
+    if status != 200:
+        raise CaptureError('Share server refused the upload')
+    try:
+        parsed = document(raw)
+    except (ValueError, UnicodeDecodeError):
+        raise CaptureError('Share server returned an invalid response')
+    if not isinstance(parsed, dict):
+        raise CaptureError('Share server returned an invalid response')
+    files = parsed.get('files')
+    if not isinstance(files, list) or not files or not isinstance(files[0], dict):
+        raise CaptureError('Share server returned no file')
+    url = files[0].get('url')
+    if not isinstance(url, str) or not url.startswith('https://') or len(url) > 2048 \
+       or re.search(r'[\x00-\x1f\x7f]', url):
+        raise CaptureError('Share server returned an invalid link')
+    return url
 
 
 def choose(runner, data, displays):
@@ -325,7 +426,7 @@ def record(runner, data, selected, output):
             runner.release(child)
 
 
-def screenshot(runner, selected, freeze, output):
+def screenshot(runner, data, selected, freeze, output):
     emit('phase', phase='screenshotting')
     target = ['-o', selected['name']] if isinstance(selected, dict) else ['-g', selected]
     try:
@@ -346,10 +447,31 @@ def screenshot(runner, selected, freeze, output):
             runner.release(freeze)
     emit('saved', name=output.name, warning='')
     notify(runner, 'Screenshot saved', output.name)
+    if data['share']:
+        try:
+            url = upload_zipline(runner, runner.env, output)
+        except CaptureError as error:
+            message = str(error)
+            emit('share_error', message=message)
+            notify(runner, 'Share failed', message)
+            copy_image(runner, output)
+            return
+        emit('shared', url=url)
+        notify(runner, 'Screenshot shared', url)
+        copy_url(runner, url)
+    else:
+        copy_image(runner, output)
+
+
+def copy_image(runner, output):
+    """Offer the PNG to the clipboard and hold foreground ownership.
+
+    Ownership ends on replacement, the next capture, shell reload, or removal
+    of the last widget. Kept as a helper so the share path can reuse it as a
+    fallback when an upload fails."""
     os.lseek(output.fd, 0, os.SEEK_SET)
-    # Foreground clipboard ownership stays attached to this helper. It ends on
-    # replacement, the next capture, shell reload, or removal of the last widget.
-    child = runner.start(['/usr/bin/wl-copy', '--foreground', '--type', 'image/png'], stdin=output.fd, stdout=subprocess.DEVNULL)
+    child = runner.start(['/usr/bin/wl-copy', '--foreground', '--type', 'image/png'],
+                         stdin=output.fd, stdout=subprocess.DEVNULL)
     try:
         emit('phase', phase='clipboard')
         deadline = time.monotonic() + MAX_DURATION
@@ -386,7 +508,7 @@ def capture(runner, data):
             record(runner, data, selected, output)
         else:
             held_freeze, freeze = freeze, None
-            screenshot(runner, selected, held_freeze, output)
+            screenshot(runner, data, selected, held_freeze, output)
     finally:
         if freeze:
             runner.release(freeze)
@@ -394,21 +516,42 @@ def capture(runner, data):
             output.close()
 
 
+def config_request(runner):
+    """Persist or load the private share-server settings. An empty request only
+    loads current settings. The token is never copied verbatim into error text."""
+    settings = document(runner.control.read_request())
+    if not isinstance(settings, dict) or set(settings) != {'server', 'token'}:
+        raise CaptureError('Invalid share settings')
+    if not settings['server'] and not settings['token']:
+        creds = read_zipline_config(runner.env)
+        server, token = (creds or (None, None))
+        emit('config', server=server or '', token=token or '')
+        return
+    validate_zipline(settings['server'], settings['token'])
+    write_zipline_config(runner.env, settings['server'], settings['token'])
+    creds = read_zipline_config(runner.env)
+    server, token = (creds or (None, None))
+    emit('config', server=server or '', token=token or '')
+    emit('config_saved')
+
+
 def main():
-    control = Control(fd=0 if len(sys.argv) == 2 and sys.argv[1] == "capture" else None)
+    control = Control(fd=0 if len(sys.argv) == 2 and sys.argv[1] in ("capture", "config") else None)
     runner = Runner(control=control)
     def cancel(_signal, _frame):
         control.cancelled = True
     signal.signal(signal.SIGTERM, cancel)
     signal.signal(signal.SIGINT, cancel)
     try:
-        if len(sys.argv) != 2 or sys.argv[1] not in ('monitors', 'microphones', 'capture'):
+        if len(sys.argv) != 2 or sys.argv[1] not in ('monitors', 'microphones', 'capture', 'config'):
             raise CaptureError('Unknown helper operation')
         op = sys.argv[1]
         if op == 'capture':
             capture(runner, request(control.read_request()))
         elif op == 'monitors':
             emit('monitors', items=[{k: m[k] for k in ('name', 'width', 'height')} for m in monitors(runner)])
+        elif op == 'config':
+            config_request(runner)
         else:
             emit('microphones', items=microphones(runner))
         return 0

@@ -25,7 +25,7 @@ Item {
     return env
   }
   function launch(op, payload) {
-    if (running || ["monitors", "microphones", "capture"].indexOf(op) < 0) return false
+    if (running || ["monitors", "microphones", "capture", "config"].indexOf(op) < 0) return false
     operation = op
     request = payload || null
     buffer = ""
@@ -71,7 +71,8 @@ Item {
     stdinEnabled: true
     stdout: SplitParser { splitMarker: ""; onRead: function(chunk) { root.collect(chunk) } }
     stderr: SplitParser { splitMarker: ""; onRead: function(chunk) {} }
-    onStarted: if (root.operation === "capture") process.write(JSON.stringify(root.request) + "\n")
+    onStarted: if (root.operation === "capture" || root.operation === "config")
+      process.write(JSON.stringify(root.request) + "\n")
     onExited: function(code) {
       deadline.stop()
       escalation.stop()

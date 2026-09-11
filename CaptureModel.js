@@ -5,6 +5,10 @@ function text(value, max) {
   return typeof value === "string" && value.length <= max
     && !/[<>&\x00-\x1f\x7f-\x9f\u202a-\u202e\u2066-\u2069]/.test(value)
 }
+function controlSafe(value, max) {
+  return typeof value === "string" && value.length <= max
+    && !/[\x00-\x1f\x7f]/.test(value)
+}
 function event(raw) {
   if (raw.length > 32768) throw new Error("oversize event")
   var depth = 0, quoted = false, escaped = false
@@ -40,9 +44,16 @@ function event(raw) {
   } else if (data.event === "saved") {
     if (!text(data.name, 128) || !/^(screenshot|screenrecording)-[0-9_-]+-[0-9a-f]{16}\.(png|mp4)$/.test(data.name)
         || !text(data.warning, 160)) throw new Error("invalid capture result")
-  } else if (data.event === "error") {
+  } else if (data.event === "shared") {
+    if (typeof data.url !== "string" || data.url.length > 2048 || !/^https:\/\//.test(data.url)
+        || /[\x00-\x1f\x7f]/.test(data.url)) throw new Error("invalid share url")
+  } else if (data.event === "share_error" || data.event === "error") {
     if (!text(data.message, 160)) throw new Error("invalid error")
+  } else if (data.event === "config") {
+    if (!controlSafe(data.server, 2048) || !controlSafe(data.token, 4096)) throw new Error("invalid config")
+  } else if (data.event === "config_saved") {
+    // no fields
   } else if (data.event !== "cancelled") throw new Error("unknown event")
   return data
 }
-if (typeof module !== "undefined") module.exports = {name, text, event}
+if (typeof module !== "undefined") module.exports = {name, text, controlSafe, event}

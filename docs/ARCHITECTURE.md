@@ -7,16 +7,23 @@ and resource ownership. There is one service per QML engine, not one recorder pe
 flowchart TD
   Bar[BarWidget.qml: one view per monitor] --> Service[CaptureService.qml: shared state]
   Panel[CapturePanel.qml: controls and keyboard navigation] --> Service
+  Settings[ShareSettingsPrompt.qml: overlay entry point] --> Service
   Service --> Transport[BackendProcess.qml: bounded protocol and watchdog]
   Transport --> Backend[capture_backend.py: validated desktop operations]
   Backend --> Runtime[capture_runtime.py: processes and file descriptors]
   Runtime --> Tools[Fixed system capture tools]
   Runtime --> Files[Anonymous private file → unique completed capture]
+  Backend -->|opt-in HTTPS| Zipline[Configured Zipline server]
 ```
 
 `CaptureModel.js` validates the small event schema before QML installs models or
 changes state. `CaptureButton.qml` and `CaptureButtonGroup.qml` provide local,
 non-animated controls. No UI component constructs a command or interprets a PID.
+
+The share settings live in a second entry point, `ShareSettingsPrompt.qml`. A bar
+panel cannot take exclusive keyboard focus, which the token field needs, so the
+prompt is an `overlay` kind mounted by the shell's panel loader and summoned from
+the panel. It reads and writes credentials through the same shared service.
 
 ## Shared lifecycle
 
