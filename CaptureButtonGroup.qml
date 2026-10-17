@@ -1,12 +1,13 @@
 import QtQuick
 import qs.Commons
+import qs.Commons as Commons
 
 Row {
   id: root
   property var options: []
   property string value: ""
   property string fontFamily: Style.font.family
-  property color foreground: Color.foreground
+  property color foreground: Commons.Color.foreground
   property bool equalWidth: false
   property int cursorIndex: -1
   signal changed(string value)
