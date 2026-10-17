@@ -2,6 +2,7 @@ import QtQuick
 import QtQuick.Shapes
 import Quickshell
 import qs.Commons
+import qs.Commons as Commons
 import qs.Ui
 import "." as Backend
 
@@ -138,7 +139,7 @@ BarWidget {
         width: Style.space(8)
         height: width
         radius: width / 2
-        color: root.bar ? root.bar.urgent : Color.urgent
+        color: root.bar ? root.bar.urgent : Commons.Color.urgent
         anchors.verticalCenter: parent.verticalCenter
 
         SequentialAnimation on opacity {
@@ -152,7 +153,7 @@ BarWidget {
       Text {
         textFormat: Text.PlainText
         text: root.elapsedTimeText
-        color: root.bar ? root.bar.barForeground : Color.foreground
+        color: root.bar ? root.bar.barForeground : Commons.Color.foreground
         font.family: root.bar ? root.bar.fontFamily : Style.font.family
         font.pixelSize: Style.font.body
         anchors.verticalCenter: parent.verticalCenter

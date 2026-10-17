@@ -1,5 +1,6 @@
 import QtQuick
 import qs.Commons
+import qs.Commons as Commons
 import qs.Ui
 
 // Apply state colors directly: hover must not run a fill animation.
@@ -11,16 +12,16 @@ BorderSurface {
   readonly property real compactFontSize: Style.font.body * 0.85
   readonly property real paddingX: Style.spacing.controlPaddingX * 0.8
   readonly property real paddingY: Style.spacing.controlPaddingY * 0.65
-  property color foreground: Color.foreground
-  property color iconColor: selected ? Style.selectedStateColor(foreground, Color.accent) : foreground
+  property color foreground: Commons.Color.foreground
+  property color iconColor: selected ? Style.selectedStateColor(foreground, Commons.Color.accent) : foreground
   property bool selected: false
   property bool hasCursor: false
   property bool leftAlign: false
   readonly property bool hot: pointer.containsMouse || hasCursor
-  readonly property var normalBorder: Border.controlSpec("normal", foreground, Color.accent)
-  readonly property var hoverBorder: Border.controlSpec("hover-cursor", foreground, Color.accent)
+  readonly property var normalBorder: Border.controlSpec("normal", foreground, Commons.Color.accent)
+  readonly property var hoverBorder: Border.controlSpec("hover-cursor", foreground, Commons.Color.accent)
   readonly property var selectedBorder: Border.controlHasWidth("selected")
-    ? Border.controlSpec("selected", foreground, Color.accent) : normalBorder
+    ? Border.controlSpec("selected", foreground, Commons.Color.accent) : normalBorder
   readonly property real insetLeft: Math.max(Border.left(normalBorder), Border.left(hoverBorder), Border.left(selectedBorder))
   readonly property real insetRight: Math.max(Border.right(normalBorder), Border.right(hoverBorder), Border.right(selectedBorder))
   readonly property real insetTop: Math.max(Border.top(normalBorder), Border.top(hoverBorder), Border.top(selectedBorder))
@@ -33,9 +34,9 @@ BorderSurface {
   opacity: enabled ? 1 : 0.45
   radius: Style.cornerRadius
   borderSpec: hot ? hoverBorder : selected ? selectedBorder : normalBorder
-  color: pointer.pressed ? Style.pressedFillFor(foreground, Color.accent)
-    : hot ? Style.hoverFillFor(foreground, Color.accent)
-    : selected ? Style.selectedFillFor(foreground, Color.accent) : Color.background
+  color: pointer.pressed ? Style.pressedFillFor(foreground, Commons.Color.accent)
+    : hot ? Style.hoverFillFor(foreground, Commons.Color.accent)
+    : selected ? Style.selectedFillFor(foreground, Commons.Color.accent) : Commons.Color.background
 
   Row {
     id: label
@@ -63,7 +64,7 @@ BorderSurface {
       font.family: root.fontFamily
       font.pixelSize: root.compactFontSize
       font.bold: root.selected
-      color: root.selected ? Style.selectedStateColor(root.foreground, Color.accent) : root.foreground
+      color: root.selected ? Style.selectedStateColor(root.foreground, Commons.Color.accent) : root.foreground
       anchors.verticalCenter: parent.verticalCenter
     }
   }
