@@ -70,7 +70,9 @@ BarWidget {
             width: 20
             height: 20
             anchors.centerIn: parent
-            scale: Math.min(parent.width, parent.height) / 20
+            // The bar measures this icon's bounds once the parent is sized (Omarchy 4.5+).
+            // A scale of 0 during creation leaves those bounds empty and the icon off-center.
+            scale: parent.width > 0 && parent.height > 0 ? Math.min(parent.width, parent.height) / 20 : 1
 
             Shape {
               anchors.fill: parent
