@@ -1,5 +1,4 @@
 import QtQuick
-import QtQuick.Shapes
 import Quickshell
 import qs.Commons
 import qs.Ui
@@ -16,8 +15,10 @@ BarWidget {
   readonly property bool opened: panelLoader.item ? panelLoader.item.opened === true : false
   readonly property bool popoutSwitchClosing: panelLoader.item ? panelLoader.item.popoutSwitchClosing === true : false
   property string subscription: ""
-  implicitWidth: row.implicitWidth
-  implicitHeight: row.implicitHeight
+  // Same shape as the built-in bar widgets: the icon button fills the widget's
+  // height, and only the recording timer sits beside it.
+  implicitWidth: button.implicitWidth + (recordingRow.visible ? recordingRow.implicitWidth + Style.space(4) : 0)
+  implicitHeight: button.implicitHeight
 
   Component.onCompleted: subscription = service.acquire()
   Component.onDestruction: service.release(subscription)
@@ -49,78 +50,18 @@ BarWidget {
     onLoaded: { root.injectPanel(); Qt.callLater(root.injectPanel) }
   }
 
-  Row {
+  Item {
     id: row
-    height: parent.height
-    spacing: Style.space(4)
+    anchors.fill: parent
 
     BarIconButton {
       id: button
-      anchors.verticalCenter: parent.verticalCenter
+      anchors.left: parent.left
+      anchors.top: parent.top
+      anchors.bottom: parent.bottom
       bar: root.bar
-      text: "camera"
+      text: "󰄀"   // nf-md-camera: a font glyph is sized and centred by the bar like its other icons
       tooltipText: root.recording ? "Recording · click to stop" : root.service.errorMessage !== "" ? "Easy Capture · error, click for details" : "Easy Capture"
-
-      iconComponent: Component {
-        Item {
-          id: camera
-          readonly property color ink: button.foreground
-
-          Item {
-            width: 20
-            height: 20
-            anchors.centerIn: parent
-            scale: Math.min(parent.width, parent.height) / 20
-
-            Shape {
-              anchors.fill: parent
-              antialiasing: true
-              ShapePath {
-                strokeColor: camera.ink
-                strokeWidth: 1.4
-                fillColor: "transparent"
-                joinStyle: ShapePath.RoundJoin
-                startX: 3
-                startY: 6
-                PathLine { x: 6; y: 6 }
-                PathLine { x: 7.5; y: 3.5 }
-                PathLine { x: 12.5; y: 3.5 }
-                PathLine { x: 14; y: 6 }
-                PathLine { x: 17; y: 6 }
-                PathQuad { x: 18.5; y: 7.5; controlX: 18.5; controlY: 6 }
-                PathLine { x: 18.5; y: 15 }
-                PathQuad { x: 17; y: 16.5; controlX: 18.5; controlY: 16.5 }
-                PathLine { x: 3; y: 16.5 }
-                PathQuad { x: 1.5; y: 15; controlX: 1.5; controlY: 16.5 }
-                PathLine { x: 1.5; y: 7.5 }
-                PathQuad { x: 3; y: 6; controlX: 1.5; controlY: 6 }
-              }
-            }
-
-            Rectangle {
-              x: 6.6
-              y: 7.6
-              width: 6.8
-              height: width
-              radius: width / 2
-              color: "transparent"
-              border.color: camera.ink
-              border.width: 1.4
-              antialiasing: true
-            }
-
-            Rectangle {
-              x: 15
-              y: 8
-              width: 1.5
-              height: width
-              radius: width / 2
-              color: camera.ink
-              antialiasing: true
-            }
-          }
-        }
-      }
 
       onPressed: function(mouseButton) {
         if (mouseButton !== Qt.LeftButton) return
@@ -130,7 +71,10 @@ BarWidget {
     }
 
     Row {
+      id: recordingRow
       visible: root.recording
+      anchors.left: button.right
+      anchors.leftMargin: Style.space(4)
       anchors.verticalCenter: parent.verticalCenter
       spacing: Style.space(4)
 
